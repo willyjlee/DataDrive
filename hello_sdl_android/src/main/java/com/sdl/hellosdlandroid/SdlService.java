@@ -37,6 +37,14 @@ import com.smartdevicelink.transport.BaseTransportConfig;
 import com.smartdevicelink.transport.MultiplexTransportConfig;
 import com.smartdevicelink.transport.TCPTransportConfig;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Vector;
 
@@ -70,6 +78,12 @@ public class SdlService extends Service {
 	private SdlManager sdlManager = null;
 
 	private SubscribeVehicleData subscribeRequest = null;
+
+	private ArrayList<Double>speeds = new ArrayList<>();
+	private ArrayList<Double>angles = new ArrayList<>();
+	private int batch = 5;
+
+	private final String CLOUD_URL = "http://c88c70f4.ngrok.io";
 
 	@Override
 	public IBinder onBind(Intent intent) {
@@ -122,6 +136,32 @@ public class SdlService extends Service {
 		super.onDestroy();
 	}
 
+	private void sendDataToCloud(ArrayList<Double>values) throws java.net.MalformedURLException {
+		URL url = new URL(CLOUD_URL);
+		HttpURLConnection urlConnection;
+		try {
+			urlConnection = (HttpURLConnection) url.openConnection();
+			urlConnection.setRequestMethod("POST");
+		} catch (IOException e) {
+			return;
+		}
+		try {
+			BufferedReader in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
+			StringBuilder resp = new StringBuilder();
+			String line;
+			while ((line = in.readLine()) != null) {
+				resp.append(line);
+			}
+
+
+		}
+		catch (Exception e) {
+		}
+		finally {
+			urlConnection.disconnect();
+		}
+	}
+
 	private void startProxy() {
 		// This logic is to select the correct transport and security levels defined in the selected build flavor
 		// Build flavors are selected by the "build variants" tab typically located in the bottom left of Android Studio
@@ -155,6 +195,7 @@ public class SdlService extends Service {
 
 			subscribeRequest = new SubscribeVehicleData();
 			subscribeRequest.setSpeed(true);
+			subscribeRequest.setSteeringWheelAngle(true);
 			subscribeRequest.setOnRPCResponseListener(new OnRPCResponseListener() {
 				@Override
 				public void onResponse(int correlationId, RPCResponse response) {
@@ -207,8 +248,22 @@ public class SdlService extends Service {
 						@Override
 						public void onNotified(RPCNotification notification) {
 							OnVehicleData vehicleData = (OnVehicleData) notification;
-							if (vehicleData.getSpeed() != null) {
+							if (vehicleData.getSpeed() != null ) {
+								speeds.add(vehicleData.getSpeed());
+								if (speeds.size() == batch) {
+									// TODO: send to server
+
+									speeds = new ArrayList<>();
+								}
 								Log.i("SdlService", "Speed status was updated to: " + vehicleData.getSpeed());
+							}
+							if (vehicleData.getSteeringWheelAngle() != null) {
+								angles.add(vehicleData.getSteeringWheelAngle());
+								if (angles.size() == batch) {
+									// TODO: send to server
+									angles = new ArrayList<>();
+								}
+								Log.i("SdlService", "Angle status was updated to: " + vehicleData.getSteeringWheelAngle());
 							}
 
 
