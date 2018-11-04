@@ -19,22 +19,28 @@ import com.smartdevicelink.managers.SdlManagerListener;
 import com.smartdevicelink.managers.file.filetypes.SdlArtwork;
 import com.smartdevicelink.protocol.enums.FunctionID;
 import com.smartdevicelink.proxy.RPCNotification;
+import com.smartdevicelink.proxy.RPCResponse;
 import com.smartdevicelink.proxy.TTSChunkFactory;
 import com.smartdevicelink.proxy.rpc.AddCommand;
 import com.smartdevicelink.proxy.rpc.MenuParams;
 import com.smartdevicelink.proxy.rpc.OnCommand;
 import com.smartdevicelink.proxy.rpc.OnHMIStatus;
+import com.smartdevicelink.proxy.rpc.OnVehicleData;
 import com.smartdevicelink.proxy.rpc.Speak;
+import com.smartdevicelink.proxy.rpc.SubscribeVehicleData;
 import com.smartdevicelink.proxy.rpc.enums.AppHMIType;
 import com.smartdevicelink.proxy.rpc.enums.FileType;
 import com.smartdevicelink.proxy.rpc.enums.HMILevel;
 import com.smartdevicelink.proxy.rpc.listeners.OnRPCNotificationListener;
+import com.smartdevicelink.proxy.rpc.listeners.OnRPCResponseListener;
 import com.smartdevicelink.transport.BaseTransportConfig;
 import com.smartdevicelink.transport.MultiplexTransportConfig;
 import com.smartdevicelink.transport.TCPTransportConfig;
 
 import java.util.Collections;
 import java.util.Vector;
+
+import static com.smartdevicelink.proxy.constants.Names.SubscribeVehicleData;
 
 public class SdlService extends Service {
 
@@ -156,6 +162,7 @@ public class SdlService extends Service {
 						public void onNotified(RPCNotification notification) {
 							OnHMIStatus status = (OnHMIStatus) notification;
 							if (status.getHmiLevel() == HMILevel.HMI_FULL && ((OnHMIStatus) notification).getFirstRun()) {
+								subscribe();
 								sendCommands();
 								performWelcomeSpeak();
 								performWelcomeShow();
@@ -169,8 +176,8 @@ public class SdlService extends Service {
 						public void onNotified(RPCNotification notification) {
 							OnCommand command = (OnCommand) notification;
 							Integer id = command.getCmdID();
-							if(id != null){
-								switch(id){
+							if (id != null) {
+								switch (id) {
 									case TEST_COMMAND_ID:
 										showTest();
 										break;
@@ -178,8 +185,20 @@ public class SdlService extends Service {
 							}
 						}
 					});
-				}
 
+					sdlManager.addOnRPCNotificationListener(FunctionID.ON_VEHICLE_DATA, new OnRPCNotificationListener() {
+						@Override
+						public void onNotified(RPCNotification notification) {
+							OnVehicleData vehicleData = (OnVehicleData) notification;
+							if (vehicleData.getSpeed() != null) {
+								Log.i("SdlService", "Speed status was updated to: " + vehicleData.getSpeed());
+							}
+
+
+						}
+					});
+
+				}
 				@Override
 				public void onDestroy() {
 					SdlService.this.stopSelf();
@@ -201,6 +220,22 @@ public class SdlService extends Service {
 			sdlManager = builder.build();
 			sdlManager.start();
 		}
+	}
+
+	private void subscribe() {
+		SubscribeVehicleData subscribeRequest = new SubscribeVehicleData();
+		subscribeRequest.setSpeed(true);
+		subscribeRequest.setOnRPCResponseListener(new OnRPCResponseListener() {
+			@Override
+			public void onResponse(int correlationId, RPCResponse response) {
+				if(response.getSuccess()){
+					Log.i("SdlService", "Successfully subscribed to vehicle data.");
+				}else{
+					Log.i("SdlService", "Request to subscribe to vehicle data was rejected.");
+				}
+			}
+		});
+		sdlManager.sendRPC(subscribeRequest);
 	}
 
 	/**
