@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.hardware.usb.UsbAccessory;
 import android.hardware.usb.UsbManager;
+import android.location.Location;
 import android.os.Build;
 import android.os.IBinder;
 import android.security.NetworkSecurityPolicy;
@@ -23,6 +24,7 @@ import com.smartdevicelink.proxy.RPCNotification;
 import com.smartdevicelink.proxy.RPCResponse;
 import com.smartdevicelink.proxy.TTSChunkFactory;
 import com.smartdevicelink.proxy.rpc.AddCommand;
+import com.smartdevicelink.proxy.rpc.GPSData;
 import com.smartdevicelink.proxy.rpc.MenuParams;
 import com.smartdevicelink.proxy.rpc.OnCommand;
 import com.smartdevicelink.proxy.rpc.OnHMIStatus;
@@ -96,6 +98,8 @@ public class SdlService extends Service {
 	private int batch = 5;
 
 	private final String CLOUD_URL = "http://localhost:5000";//"http://b17c0f7d.ngrok.io/";
+
+	private int run = 0;
 
 	@Override
 	public IBinder onBind(Intent intent) {
@@ -258,6 +262,7 @@ public class SdlService extends Service {
 			subscribeRequest = new SubscribeVehicleData();
 			subscribeRequest.setSpeed(true);
 			subscribeRequest.setSteeringWheelAngle(true);
+			subscribeRequest.setGps(true);
 			subscribeRequest.setOnRPCResponseListener(new OnRPCResponseListener() {
 				@Override
 				public void onResponse(int correlationId, RPCResponse response) {
@@ -315,6 +320,43 @@ public class SdlService extends Service {
 								if (speeds.size() == batch) {
 									// TODO: send to server
 									sendDataToCloud(speeds);
+
+									GPSData gpsData = vehicleData.getGps();
+									if (gpsData != null) {
+										Log.i("gpsdata", gpsData.toString());
+										Location a = new Location("");
+										a.setLatitude(gpsData.getLatitudeDegrees());
+										a.setLongitude(gpsData.getLongitudeDegrees());
+									}
+
+									if (run % 2 == 0){
+										Log.i("tag", "anomaly ahead!");
+										sdlManager.getScreenManager().beginTransaction();
+										sdlManager.getScreenManager().setTextField4("Anomaly ahead! Drive slowly!");
+										sdlManager.getScreenManager().commit(new CompletionListener() {
+											@Override
+											public void onComplete(boolean success) {
+												if (success){
+													Log.i(TAG, "anomaly ahead show successful");
+												}
+											}
+										});
+										run  = (run + 1) %2;
+									} else {
+										sdlManager.getScreenManager().beginTransaction();
+										sdlManager.getScreenManager().setTextField4("No anomalies detected.");
+										sdlManager.getScreenManager().commit(new CompletionListener() {
+											@Override
+											public void onComplete(boolean success) {
+												if (success){
+													Log.i(TAG, "anomaly ahead show successful");
+												}
+											}
+										});
+									}
+
+
+
 									if (detectBrake(speeds)) {
 										Log.i("tag", "abrupt brake");
 										sdlManager.getScreenManager().beginTransaction();
@@ -327,6 +369,8 @@ public class SdlService extends Service {
 												}
 											}
 										});
+
+
 									} else {
 										Log.i("tag", "Regular brake");
 										sdlManager.getScreenManager().beginTransaction();
