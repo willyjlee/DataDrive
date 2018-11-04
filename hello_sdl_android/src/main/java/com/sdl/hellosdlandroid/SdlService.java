@@ -90,6 +90,9 @@ public class SdlService extends Service {
 
 	private ArrayList<Double>speeds = new ArrayList<>();
 	private ArrayList<Double>angles = new ArrayList<>();
+
+	private ArrayList<Double>averageSpeeds = new ArrayList<>();
+
 	private int batch = 5;
 
 	private final String CLOUD_URL = "http://localhost:5000";//"http://b17c0f7d.ngrok.io/";
@@ -101,6 +104,10 @@ public class SdlService extends Service {
 
 	@Override
 	public void onCreate() {
+		averageSpeeds.add(55.0);
+		averageSpeeds.add(65.0);
+		averageSpeeds.add(63.5);
+		averageSpeeds.add(70.0);
 		Log.d(TAG, "onCreate");
 		super.onCreate();
 
@@ -198,6 +205,15 @@ public class SdlService extends Service {
 		return false;
 	}
 
+	private double recommendedSpeed(double speed) {
+		// pull data from server with neighboring mobile phones
+		double avg = speed;
+		for(Double d : this.averageSpeeds)
+			avg += d.doubleValue();
+		avg /= this.averageSpeeds.size();
+		return avg;
+	}
+
 	private boolean detectHardTurn(ArrayList<Double>speeds) {
 		double eps = 30;
 		for(int i = 0; i < speeds.size()-1;i++){
@@ -268,8 +284,8 @@ public class SdlService extends Service {
 								sdlManager.sendRPC(subscribeRequest);
 							if (status.getHmiLevel() == HMILevel.HMI_FULL && ((OnHMIStatus) notification).getFirstRun()) {
 								sendCommands();
-								performWelcomeSpeak();
-								performWelcomeShow();
+//								performWelcomeSpeak();
+//								performWelcomeShow();
 							}
 						}
 					});
@@ -324,6 +340,18 @@ public class SdlService extends Service {
 											}
 										});
 									}
+
+									Log.i("tag", "Recommended speed");
+									sdlManager.getScreenManager().beginTransaction();
+									sdlManager.getScreenManager().setTextField3("Recommended speed: " + recommendedSpeed(speeds.get(speeds.size()-1)) + " km/h");
+									sdlManager.getScreenManager().commit(new CompletionListener() {
+										@Override
+										public void onComplete(boolean success) {
+											if (success){
+												Log.i(TAG, "recommended speed show successful");
+											}
+										}
+									});
 
 									speeds = new ArrayList<>();
 								}
