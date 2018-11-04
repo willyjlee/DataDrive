@@ -81,7 +81,7 @@ public class SdlService extends Service {
 	// The default port is 12345
 	// The IP is of the machine that is running SDL Core
 	private static final int TCP_PORT = 12345;
-	private static final String DEV_MACHINE_IP_ADDRESS = "192.168.1.13";//"10.142.40.116";
+	private static final String DEV_MACHINE_IP_ADDRESS = "10.142.43.100";//"192.168.1.13";//"10.142.40.116";
 
 	// variable to create and call functions of the SyncProxy
 	private SdlManager sdlManager = null;
