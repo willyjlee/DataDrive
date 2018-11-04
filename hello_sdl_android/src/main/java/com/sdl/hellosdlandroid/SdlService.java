@@ -37,12 +37,20 @@ import com.smartdevicelink.transport.BaseTransportConfig;
 import com.smartdevicelink.transport.MultiplexTransportConfig;
 import com.smartdevicelink.transport.TCPTransportConfig;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -72,7 +80,7 @@ public class SdlService extends Service {
 	// The default port is 12345
 	// The IP is of the machine that is running SDL Core
 	private static final int TCP_PORT = 12345;
-	private static final String DEV_MACHINE_IP_ADDRESS = "10.142.40.116";
+	private static final String DEV_MACHINE_IP_ADDRESS = "192.168.1.13";//"10.142.40.116";
 
 	// variable to create and call functions of the SyncProxy
 	private SdlManager sdlManager = null;
@@ -83,7 +91,7 @@ public class SdlService extends Service {
 	private ArrayList<Double>angles = new ArrayList<>();
 	private int batch = 5;
 
-	private final String CLOUD_URL = "http://c88c70f4.ngrok.io";
+	private final String CLOUD_URL = "http://b17c0f7d.ngrok.io/";
 
 	@Override
 	public IBinder onBind(Intent intent) {
@@ -136,8 +144,14 @@ public class SdlService extends Service {
 		super.onDestroy();
 	}
 
-	private void sendDataToCloud(ArrayList<Double>values) throws java.net.MalformedURLException {
-		URL url = new URL(CLOUD_URL);
+	private void sendDataToCloud(ArrayList<Double>values) {
+		Log.i("sending", "sending data to cloud: " + values);
+		URL url;
+		try {
+			url = new URL(CLOUD_URL);
+		} catch (MalformedURLException e) {
+			return;
+		}
 		HttpURLConnection urlConnection;
 		try {
 			urlConnection = (HttpURLConnection) url.openConnection();
@@ -146,14 +160,18 @@ public class SdlService extends Service {
 			return;
 		}
 		try {
-			BufferedReader in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
-			StringBuilder resp = new StringBuilder();
-			String line;
-			while ((line = in.readLine()) != null) {
-				resp.append(line);
-			}
+			JSONObject json = new JSONObject();
+			JSONArray array = new JSONArray();
+			for (Double val : values)
+				array.put(val.doubleValue());
+			String jsonString = json.put("value", array).toString();
 
-
+			OutputStream out = new BufferedOutputStream(urlConnection.getOutputStream());
+			BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out, "UTF-8"));
+			writer.write(jsonString);
+			writer.flush();
+			writer.close();
+			out.close();
 		}
 		catch (Exception e) {
 		}
@@ -252,7 +270,7 @@ public class SdlService extends Service {
 								speeds.add(vehicleData.getSpeed());
 								if (speeds.size() == batch) {
 									// TODO: send to server
-
+									sendDataToCloud(speeds);
 									speeds = new ArrayList<>();
 								}
 								Log.i("SdlService", "Speed status was updated to: " + vehicleData.getSpeed());
@@ -261,6 +279,7 @@ public class SdlService extends Service {
 								angles.add(vehicleData.getSteeringWheelAngle());
 								if (angles.size() == batch) {
 									// TODO: send to server
+									sendDataToCloud(angles);
 									angles = new ArrayList<>();
 								}
 								Log.i("SdlService", "Angle status was updated to: " + vehicleData.getSteeringWheelAngle());
