@@ -11,6 +11,7 @@ import android.hardware.usb.UsbAccessory;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.security.NetworkSecurityPolicy;
 import android.util.Log;
 
 import com.smartdevicelink.managers.CompletionListener;
@@ -91,7 +92,7 @@ public class SdlService extends Service {
 	private ArrayList<Double>angles = new ArrayList<>();
 	private int batch = 5;
 
-	private final String CLOUD_URL = "http://b17c0f7d.ngrok.io/";
+	private final String CLOUD_URL = "http://localhost:5000";//"http://b17c0f7d.ngrok.io/";
 
 	@Override
 	public IBinder onBind(Intent intent) {
@@ -127,6 +128,8 @@ public class SdlService extends Service {
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
+		NetworkSecurityPolicy policy = NetworkSecurityPolicy.getInstance();
+		Log.i("cleartextpermitted", policy.isCleartextTrafficPermitted() + "");
 		startProxy();
 		return START_STICKY;
 	}
@@ -153,13 +156,17 @@ public class SdlService extends Service {
 			return;
 		}
 		HttpURLConnection urlConnection;
+
 		try {
+			Log.i("tag", "set connection");
 			urlConnection = (HttpURLConnection) url.openConnection();
 			urlConnection.setRequestMethod("POST");
 		} catch (IOException e) {
+			Log.i("tag", "IOException");
 			return;
 		}
 		try {
+
 			JSONObject json = new JSONObject();
 			JSONArray array = new JSONArray();
 			for (Double val : values)
@@ -172,13 +179,34 @@ public class SdlService extends Service {
 			writer.flush();
 			writer.close();
 			out.close();
+			Log.i("tag", "wrote data");
 		}
 		catch (Exception e) {
+			Log.i("error", e.toString());
 		}
 		finally {
 			urlConnection.disconnect();
 		}
 	}
+
+	private boolean detectBrake(ArrayList<Double>speeds) {
+		double eps = 30;
+		for(int i = 0; i < speeds.size()-1;i++){
+			if(speeds.get(i) - speeds.get(i+1) > eps)
+				return true;
+		}
+		return false;
+	}
+
+	private boolean detectHardTurn(ArrayList<Double>speeds) {
+		double eps = 30;
+		for(int i = 0; i < speeds.size()-1;i++){
+			if(Math.abs(speeds.get(i) - speeds.get(i+1)) > eps)
+				return true;
+		}
+		return false;
+	}
+
 
 	private void startProxy() {
 		// This logic is to select the correct transport and security levels defined in the selected build flavor
@@ -271,6 +299,32 @@ public class SdlService extends Service {
 								if (speeds.size() == batch) {
 									// TODO: send to server
 									sendDataToCloud(speeds);
+									if (detectBrake(speeds)) {
+										Log.i("tag", "abrupt brake");
+										sdlManager.getScreenManager().beginTransaction();
+										sdlManager.getScreenManager().setTextField1("Abrupt Brake!!!");
+										sdlManager.getScreenManager().commit(new CompletionListener() {
+											@Override
+											public void onComplete(boolean success) {
+												if (success){
+													Log.i(TAG, "abrupt brake show successful");
+												}
+											}
+										});
+									} else {
+										Log.i("tag", "Regular brake");
+										sdlManager.getScreenManager().beginTransaction();
+										sdlManager.getScreenManager().setTextField1("Regular Drive");
+										sdlManager.getScreenManager().commit(new CompletionListener() {
+											@Override
+											public void onComplete(boolean success) {
+												if (success){
+													Log.i(TAG, "regular drive show successful");
+												}
+											}
+										});
+									}
+
 									speeds = new ArrayList<>();
 								}
 								Log.i("SdlService", "Speed status was updated to: " + vehicleData.getSpeed());
@@ -280,6 +334,33 @@ public class SdlService extends Service {
 								if (angles.size() == batch) {
 									// TODO: send to server
 									sendDataToCloud(angles);
+
+									if (detectHardTurn(angles)) {
+										Log.i("tag", "abrupt angle");
+										sdlManager.getScreenManager().beginTransaction();
+										sdlManager.getScreenManager().setTextField2("Hard Turn!!!");
+										sdlManager.getScreenManager().commit(new CompletionListener() {
+											@Override
+											public void onComplete(boolean success) {
+												if (success) {
+													Log.i(TAG, "hard turn show successful");
+												}
+											}
+										});
+									} else {
+										Log.i("tag", "Regular angle");
+										sdlManager.getScreenManager().beginTransaction();
+										sdlManager.getScreenManager().setTextField2("Regular steering");
+										sdlManager.getScreenManager().commit(new CompletionListener() {
+											@Override
+											public void onComplete(boolean success) {
+												if (success){
+													Log.i(TAG, "regular angle show successful");
+												}
+											}
+										});
+									}
+
 									angles = new ArrayList<>();
 								}
 								Log.i("SdlService", "Angle status was updated to: " + vehicleData.getSteeringWheelAngle());
