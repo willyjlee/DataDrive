@@ -69,6 +69,8 @@ public class SdlService extends Service {
 	// variable to create and call functions of the SyncProxy
 	private SdlManager sdlManager = null;
 
+	private SubscribeVehicleData subscribeRequest = null;
+
 	@Override
 	public IBinder onBind(Intent intent) {
 		return null;
@@ -151,6 +153,19 @@ public class SdlService extends Service {
 			Vector<AppHMIType> appType = new Vector<>();
 			appType.add(AppHMIType.MEDIA);
 
+			subscribeRequest = new SubscribeVehicleData();
+			subscribeRequest.setSpeed(true);
+			subscribeRequest.setOnRPCResponseListener(new OnRPCResponseListener() {
+				@Override
+				public void onResponse(int correlationId, RPCResponse response) {
+					if(response.getSuccess()){
+						Log.i("SdlService", "Successfully subscribed to vehicle data.");
+					}else{
+						Log.i("SdlService", "Request to subscribe to vehicle data was rejected.");
+					}
+				}
+			});
+
 			// The manager listener helps you know when certain events that pertain to the SDL Manager happen
 			// Here we will listen for ON_HMI_STATUS and ON_COMMAND notifications
 			SdlManagerListener listener = new SdlManagerListener() {
@@ -161,8 +176,10 @@ public class SdlService extends Service {
 						@Override
 						public void onNotified(RPCNotification notification) {
 							OnHMIStatus status = (OnHMIStatus) notification;
+							if (status.getHmiLevel() == HMILevel.HMI_LIMITED || status.getHmiLevel() == HMILevel.HMI_BACKGROUND
+								|| status.getHmiLevel() == HMILevel.HMI_FULL)
+								sdlManager.sendRPC(subscribeRequest);
 							if (status.getHmiLevel() == HMILevel.HMI_FULL && ((OnHMIStatus) notification).getFirstRun()) {
-								subscribe();
 								sendCommands();
 								performWelcomeSpeak();
 								performWelcomeShow();
@@ -220,22 +237,6 @@ public class SdlService extends Service {
 			sdlManager = builder.build();
 			sdlManager.start();
 		}
-	}
-
-	private void subscribe() {
-		SubscribeVehicleData subscribeRequest = new SubscribeVehicleData();
-		subscribeRequest.setSpeed(true);
-		subscribeRequest.setOnRPCResponseListener(new OnRPCResponseListener() {
-			@Override
-			public void onResponse(int correlationId, RPCResponse response) {
-				if(response.getSuccess()){
-					Log.i("SdlService", "Successfully subscribed to vehicle data.");
-				}else{
-					Log.i("SdlService", "Request to subscribe to vehicle data was rejected.");
-				}
-			}
-		});
-		sdlManager.sendRPC(subscribeRequest);
 	}
 
 	/**
